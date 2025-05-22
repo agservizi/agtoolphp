@@ -903,6 +903,11 @@ function initYearlyTrendChart() {
 <?php
 // --- ESPORTAZIONE DATI REPORT ---
 if (isset($_GET['export'])) {
+    // Disabilita output buffer e header HTML
+    if (ob_get_level()) ob_end_clean();
+    header_remove('Content-Encoding');
+    header_remove('Content-Length');
+    
     $export_type = $_GET['export'];
     $export_view = $_GET['view'] ?? 'monthly';
     $export_month = intval($_GET['month'] ?? date('m'));
