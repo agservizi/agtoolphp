@@ -1,0 +1,7 @@
+{
+    "require": {
+        "phpmailer/phpmailer": "^6.10",
+        "minishlink/web-push": "^0.2.2",
+        "setasign/fpdf": "^1.8"
+    }
+}
