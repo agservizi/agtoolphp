@@ -48,7 +48,4 @@ if (!getenv('SMTP_PASS')) putenv('SMTP_PASS=Giogiu2123@');
 
 define('VAPID_PUBLIC_KEY', 'BAze-RF--Ghfm6-Sj3242JBknltGkUASrKYWtWz997qFZDaNy3NzvHYxC41nkkXOsA09qr8bUJusR38PQh_Rw60');
 define('VAPID_PRIVATE_KEY', '5UxfwJ4zOs7w6mY3lrQpElRSmJvy7NLKJyXHs4OUeBo');
-
-// Chiave API OpenRouter (NON VERSIONARE QUESTO FILE SU GIT!)
-$OPENROUTER_API_KEY = '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';
 ?>

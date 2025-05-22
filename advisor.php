@@ -60,98 +60,6 @@ function generate_saving_advice($amount, $period, $frequency) {
     ];
 }
 
-// Funzione per ottenere un consiglio AI da OpenRouter DeepSeek
-function get_ai_advice_from_openrouter($question, $user_context = '') {
-    global $OPENROUTER_API_KEY;
-    $api_key = $OPENROUTER_API_KEY;
-    $url = 'https://openrouter.ai/api/v1/chat/completions';
-    
-    $messages = [
-        [
-            'role' => 'system',
-            'content' => "Sei un consulente finanziario esperto. Fornisci risposte pratiche, chiare e personalizzate su risparmio, investimenti, budget e gestione del denaro. Usa un tono amichevole e professionale. $user_context"
-        ],
-        [
-            'role' => 'user',
-            'content' => $question
-        ]
-    ];
-    
-    $data = [
-        'model' => 'deepseek/deepseek-r1:free',
-        'messages' => $messages,
-        'max_tokens' => 512,
-        'temperature' => 0.7
-    ];
-    
-    $headers = [
-        'Authorization: Bearer ' . $api_key,
-        'Content-Type: application/json',
-        'HTTP-Referer: https://agtool.local/' // opzionale, per policy OpenRouter
-    ];
-    
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    $response = curl_exec($ch);
-    $err = curl_error($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($err || !$response || $http_code !== 200) {
-        return 'Mi dispiace, si è verificato un errore durante l\'elaborazione della richiesta. Codice HTTP: ' . $http_code . ' - Errore: ' . $err . ' - Risposta: ' . htmlspecialchars($response);
-    }
-    $json = json_decode($response, true);
-    if (isset($json['choices'][0]['message']['content'])) {
-        return trim($json['choices'][0]['message']['content']);
-    } else {
-        return 'Non sono riuscito a generare un consiglio in questo momento.';
-    }
-}
-
-// Funzione per generare il contesto finanziario dell'utente per l'AI
-function get_user_financial_context($conn, $user_phone) {
-    $current_month = date('m');
-    $current_year = date('Y');
-    // Spese totali mese
-    $sql_exp = "SELECT SUM(amount) as total FROM transactions WHERE type = 'uscita' AND user_phone = '$user_phone' AND MONTH(date) = $current_month AND YEAR(date) = $current_year";
-    $result_exp = $conn->query($sql_exp);
-    $total_expenses = $result_exp && $result_exp->num_rows > 0 ? floatval($result_exp->fetch_assoc()['total']) : 0;
-    // Entrate totali mese
-    $sql_inc = "SELECT SUM(amount) as total FROM transactions WHERE type = 'entrata' AND user_phone = '$user_phone' AND MONTH(date) = $current_month AND YEAR(date) = $current_year";
-    $result_inc = $conn->query($sql_inc);
-    $total_income = $result_inc && $result_inc->num_rows > 0 ? floatval($result_inc->fetch_assoc()['total']) : 0;
-    // Categorie principali di spesa
-    $sql_cat = "SELECT category, SUM(amount) as total FROM transactions WHERE type = 'uscita' AND user_phone = '$user_phone' AND MONTH(date) = $current_month AND YEAR(date) = $current_year GROUP BY category ORDER BY total DESC LIMIT 3";
-    $result_cat = $conn->query($sql_cat);
-    $top_categories = [];
-    if ($result_cat && $result_cat->num_rows > 0) {
-        while($row = $result_cat->fetch_assoc()) {
-            $top_categories[] = $row['category'] . ' (' . format_currency($row['total']) . ')';
-        }
-    }
-    // Rapporto spese/entrate
-    $expense_ratio = ($total_income > 0) ? ($total_expenses / $total_income) * 100 : 0;
-    // Saldo totale
-    $sql_balance = "SELECT SUM(CASE WHEN type = 'entrata' THEN amount ELSE -amount END) as saldo FROM transactions WHERE user_phone = '$user_phone'";
-    $result_balance = $conn->query($sql_balance);
-    $saldo = $result_balance && $result_balance->num_rows > 0 ? floatval($result_balance->fetch_assoc()['saldo']) : 0;
-    // Obiettivi di risparmio (se presenti)
-    $sql_goal = "SELECT name, target_amount, current_amount FROM savings WHERE user_phone = '$user_phone' AND status = 'attivo' ORDER BY id DESC LIMIT 1";
-    $result_goal = $conn->query($sql_goal);
-    $goal_str = '';
-    if ($result_goal && $result_goal->num_rows > 0) {
-        $goal = $result_goal->fetch_assoc();
-        $goal_str = "Obiettivo attivo: " . $goal['name'] . ", risparmiati " . format_currency($goal['current_amount']) . " su " . format_currency($goal['target_amount']) . ". ";
-    }
-    // Costruisci il contesto
-    $context = "Dati utente: Spese mese: " . format_currency($total_expenses) . ", Entrate mese: " . format_currency($total_income) . ", Rapporto spese/entrate: " . round($expense_ratio,1) . "%. Categorie principali: " . implode(', ', $top_categories) . ". Saldo totale: " . format_currency($saldo) . ". $goal_str";
-    return $context;
-}
-
 // Gestisce le richieste AJAX
 if (isset($_GET['action'])) {
     $action = $_GET['action'];
@@ -224,36 +132,23 @@ if (isset($_GET['action'])) {
         // Ottieni un consiglio dal database in base al tipo
         $sql = "SELECT * FROM financial_tips WHERE type LIKE '%$advice_type%' OR type = 'generale' ORDER BY RAND() LIMIT 1";
         $result = $conn->query($sql);
+        
         if ($result->num_rows > 0) {
             $tip = $result->fetch_assoc();
-            $db_response = [
+            $response = [
                 'title' => $tip['title'],
                 'message' => $tip['description']
             ];
         } else {
-            $db_response = [
+            // Consiglio predefinito se non ne trova uno nel database
+            $response = [
                 'title' => 'Consiglio Finanziario',
                 'message' => 'Per migliorare la tua situazione finanziaria, inizia a tenere traccia di tutte le tue entrate e uscite. Questo ti aiuterà a identificare le aree in cui puoi risparmiare.'
             ];
         }
-        // Chiamata all'AI per un consiglio personalizzato con contesto
-        $user_context = get_user_financial_context($conn, $phone);
-        $ai_message = get_ai_advice_from_openrouter($_GET['question'], $user_context);
-        $response = [
-            'title' => $db_response['title'],
-            'message' => $db_response['message'],
-            'ai_message' => $ai_message
-        ];
+        
         header('Content-Type: application/json');
         echo json_encode($response);
-        exit;
-    }
-    if ($action === 'get_ai_advice' && isset($_GET['question'])) {
-        $question = trim($_GET['question']);
-        $user_context = get_user_financial_context($conn, $phone);
-        $ai_advice = get_ai_advice_from_openrouter($question, $user_context);
-        header('Content-Type: application/json');
-        echo json_encode(['title' => 'Consiglio AI', 'message' => $ai_advice]);
         exit;
     }
 }
@@ -266,7 +161,7 @@ include 'header.php';
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0 text-dark">Consulente</h1>
+                <h1 class="m-0 text-dark">Consigliere Finanziario</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
@@ -501,63 +396,3 @@ include 'header.php';
 </section>
 
 <?php include 'footer.php'; ?>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Simulatore di risparmio: calcolo risparmio proiettato
-    const simCalculateBtn = document.getElementById('sim-calculate');
-    if (simCalculateBtn) {
-        simCalculateBtn.addEventListener('click', function() {
-            const amount = document.getElementById('sim-amount').value;
-            const frequency = document.getElementById('sim-frequency').value;
-            const period = document.getElementById('sim-period').value;
-            
-            // Chiamata AJAX per calcolare il risparmio
-            fetch('advisor.php?action=calculate_savings&amount=' + amount + '&frequency=' + frequency + '&period=' + period)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('sim-results-message').innerHTML = data.message;
-                    document.getElementById('sim-results-total').innerHTML = data.formatted_total;
-                    document.getElementById('sim-results').style.display = 'block';
-                })
-                .catch(error => {
-                    console.error('Errore nel calcolo del risparmio:', error);
-                });
-        });
-    }
-    
-    // Aggiorna l'etichetta del periodo selezionato
-    const simPeriodInput = document.getElementById('sim-period');
-    const simPeriodDisplay = document.getElementById('sim-period-display');
-    if (simPeriodInput && simPeriodDisplay) {
-        simPeriodInput.addEventListener('input', function() {
-            simPeriodDisplay.innerHTML = this.value + ' mesi';
-        });
-    }
-    
-    // Chat AI: invio domanda e ricezione risposta
-    const chatForm = document.getElementById('chat-form');
-    const chatInput = document.getElementById('chat-input');
-    const chatMessages = document.getElementById('chat-messages');
-    if (chatForm && chatInput && chatMessages) {
-        chatForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const question = chatInput.value.trim();
-            if (!question) return;
-            // Mostra domanda utente
-            chatMessages.innerHTML += `<div class='direct-chat-msg right'><div class='direct-chat-infos clearfix'><span class='direct-chat-name float-right'>Tu</span><span class='direct-chat-timestamp float-left'>${new Date().toLocaleTimeString()}</span></div><div class='direct-chat-text bg-primary text-white'>${question}</div></div>`;
-            chatInput.value = '';
-            // Chiamata AJAX a get_ai_advice
-            fetch('advisor.php?action=get_ai_advice&question=' + encodeURIComponent(question))
-                .then(r => r.json())
-                .then(data => {
-                    chatMessages.innerHTML += `<div class='direct-chat-msg'><div class='direct-chat-infos clearfix'><span class='direct-chat-name float-left'>Consulente AI</span><span class='direct-chat-timestamp float-right'>${new Date().toLocaleTimeString()}</span></div><div class='direct-chat-text'>${data.message}</div></div>`;
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                })
-                .catch(() => {
-                    chatMessages.innerHTML += `<div class='direct-chat-msg'><div class='direct-chat-text text-danger'>Errore nel recupero del consiglio AI.</div></div>`;
-                });
-        });
-    }
-});
-</script>
