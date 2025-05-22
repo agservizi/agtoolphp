@@ -936,9 +936,17 @@ if (isset($_GET['export'])) {
     }
     // Esporta CSV
     if ($export_type == 'csv') {
+        if (!$exports_writable) {
+            echo '<div class="alert alert-danger">Errore: la cartella <code>exports</code> non è scrivibile. Impossibile esportare il file.</div>';
+            exit;
+        }
+        $out = fopen('php://output', 'w');
+        if (!$out) {
+            echo '<div class="alert alert-danger">Errore: impossibile aprire lo stream di output per il CSV.</div>';
+            exit;
+        }
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="report.csv"');
-        $out = fopen('php://output', 'w');
         fputcsv($out, ['Data','Descrizione','Categoria','Tipo','Importo']);
         foreach ($rows as $r) {
             fputcsv($out, [$r['date'],$r['description'],$r['category'],$r['type'],$r['amount']]);
@@ -948,9 +956,17 @@ if (isset($_GET['export'])) {
     }
     // Esporta Excel (compatibile con Excel, ma formato CSV con estensione xls)
     if ($export_type == 'excel') {
+        if (!$exports_writable) {
+            echo '<div class="alert alert-danger">Errore: la cartella <code>exports</code> non è scrivibile. Impossibile esportare il file.</div>';
+            exit;
+        }
+        $out = fopen('php://output', 'w');
+        if (!$out) {
+            echo '<div class="alert alert-danger">Errore: impossibile aprire lo stream di output per Excel.</div>';
+            exit;
+        }
         header('Content-Type: application/vnd.ms-excel');
         header('Content-Disposition: attachment; filename="report.xls"');
-        $out = fopen('php://output', 'w');
         fputcsv($out, ['Data','Descrizione','Categoria','Tipo','Importo'], "\t");
         foreach ($rows as $r) {
             fputcsv($out, [$r['date'],$r['description'],$r['category'],$r['type'],$r['amount']], "\t");
@@ -960,6 +976,10 @@ if (isset($_GET['export'])) {
     }
     // Esporta PDF (richiede FPDF)
     if ($export_type == 'pdf') {
+        if (!$exports_writable) {
+            echo '<div class="alert alert-danger">Errore: la cartella <code>exports</code> non è scrivibile. Impossibile esportare il file PDF.</div>';
+            exit;
+        }
         require_once __DIR__ . '/vendor/autoload.php';
         if (!class_exists('FPDF')) {
             echo '<div class="alert alert-danger">Libreria FPDF non installata. Installa con composer require setasign/fpdf</div>';
@@ -1126,3 +1146,12 @@ $result = $stmt->get_result();
 </div>
 
 <?php include 'footer.php'; ?>
+
+<?php
+// --- DIAGNOSTICA CARTELLA EXPORTS ---
+$exports_dir = __DIR__ . '/exports';
+$exports_writable = is_dir($exports_dir) && is_writable($exports_dir);
+if (!$exports_writable) {
+    echo '<div class="alert alert-danger"><b>Attenzione:</b> La cartella <code>exports</code> non esiste o non è scrivibile. I file di esportazione non potranno essere creati.<br>Controlla i permessi della cartella o ricreala manualmente.</div>';
+}
+?>
