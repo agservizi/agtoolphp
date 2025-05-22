@@ -1060,4 +1060,69 @@ if (isset($_GET['export'])) {
 }
 ?>
 
+<?php
+// --- CRONOLOGIA ESPORTAZIONI ---
+$phone = $_SESSION['user_phone'];
+$stmt = $conn->prepare("SELECT id FROM users WHERE phone = ?");
+$stmt->bind_param('s', $phone);
+$stmt->execute();
+$stmt->bind_result($user_id);
+$stmt->fetch();
+$stmt->close();
+
+$sql_exports = "SELECT * FROM exported_reports WHERE user_id = ? ORDER BY created_at DESC LIMIT 30";
+$stmt = $conn->prepare($sql_exports);
+$stmt->bind_param('i', $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
+?>
+<div class="card mt-4">
+    <div class="card-header bg-info text-white">
+        <h3 class="card-title"><i class="fas fa-history"></i> Cronologia Esportazioni</h3>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Periodo</th>
+                    <th>Categoria</th>
+                    <th>Data esportazione</th>
+                    <th>File</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php
+            if ($result->num_rows > 0) {
+                while($row = $result->fetch_assoc()) {
+                    $tipo = ucfirst($row['export_type']);
+                    $periodo = '';
+                    if ($row['export_type'] == 'daily') {
+                        $periodo = date('d/m/Y', strtotime($row['export_date']));
+                    } elseif ($row['export_type'] == 'monthly') {
+                        $periodo = get_month_name($row['export_month']) . ' ' . $row['export_year'];
+                    } elseif ($row['export_type'] == 'yearly') {
+                        $periodo = $row['export_year'];
+                    }
+                    $categoria = $row['export_category'] ?? '';
+                    $data_export = date('d/m/Y H:i', strtotime($row['created_at']));
+                    $file = $row['download_url'];
+                    echo "<tr>";
+                    echo "<td>$tipo</td>";
+                    echo "<td>$periodo</td>";
+                    echo "<td>".htmlspecialchars($categoria)."</td>";
+                    echo "<td>$data_export</td>";
+                    echo "<td><a href='$file' class='btn btn-sm btn-outline-primary' target='_blank'><i class='fas fa-download'></i> Scarica</a></td>";
+                    echo "</tr>";
+                }
+            } else {
+                echo "<tr><td colspan='5' class='text-center'>Nessuna esportazione trovata</td></tr>";
+            }
+            ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <?php include 'footer.php'; ?>
