@@ -151,6 +151,28 @@ if ($conn->query($sql) === FALSE) {
     $success[] = "Tabella push_subscriptions creata o già esistente.";
 }
 
+// Crea tabella exported_reports per la cronologia esportazioni
+$sql = "CREATE TABLE IF NOT EXISTS exported_reports (
+    id INT(11) AUTO_INCREMENT PRIMARY KEY,
+    user_id INT(11) NOT NULL,
+    export_type VARCHAR(20) NOT NULL, -- daily, monthly, yearly, ecc.
+    export_view VARCHAR(20) NOT NULL, -- daily, monthly, yearly, ecc.
+    export_date DATE DEFAULT NULL,    -- per report giornalieri
+    export_month INT DEFAULT NULL,    -- per report mensili
+    export_year INT DEFAULT NULL,     -- per report mensili/annuali
+    export_category VARCHAR(100) DEFAULT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    download_url VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+if ($conn->query($sql) === FALSE) {
+    $errors[] = "Errore nella creazione della tabella exported_reports: " . $conn->error;
+} else {
+    $success[] = "Tabella exported_reports creata o già esistente.";
+}
+
 // Inserisci utente di default solo se la tabella è vuota
 $check = $conn->query("SELECT COUNT(*) as total FROM users");
 if ($check && ($row = $check->fetch_assoc()) && $row['total'] == 0) {

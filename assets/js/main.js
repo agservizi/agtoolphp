@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Controlla notifiche automatiche
     checkAutoNotifications();
     setInterval(updateNotificationBadge, 60000);
+
+    // Chiusura report giornaliero (al primo accesso del giorno)
+    closeDailyReport();
+
     // Marca notifiche come lette al click sulla campanella
     var bell = document.querySelector('.fa-bell');
     if (bell) {
@@ -701,4 +705,21 @@ if (window.location.pathname !== '/login.php') {
     document.addEventListener('DOMContentLoaded', function () {
         initPushNotifications();
     });
+}
+
+/**
+ * Chiusura report giornaliero via AJAX
+ */
+function closeDailyReport() {
+    fetch('close_daily_report.php', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'success') {
+                showToast('success', 'Report giornaliero chiuso e salvato!');
+            } else if (data.status === 'ok' && data.message) {
+                // Report già generato o nessuna transazione
+                // showToast('info', data.message); // opzionale
+            }
+        })
+        .catch(function() {});
 }
